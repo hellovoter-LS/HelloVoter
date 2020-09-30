@@ -61,7 +61,7 @@ async function signup(json) {
 
   // Ensure that address.state is always uppercase
   let address = json.address;
-  address.state = address.state.toUpperCase();
+  address.state = address.state.split(' ').join('').toUpperCase();
 
 
   let allowed_states = ov_config.allowed_states.toUpperCase().split(',');
