@@ -6,20 +6,33 @@ import {
 
 import { serializeAmbassador, serializeTripler, serializePayout } from './serializers.js';
 import { ov_config } from '../../../../lib/ov_config';
-import { exportAmbassadors, exportTriplers } from '../../../../services/export';
+import { exportAmbassadorsJSON, exportTriplersJSON, exportAmbassadorsCSV, exportTriplersCSV } from '../../../../services/export';
 
 module.exports = Router({mergeParams: true})
-.get('/csv-export/ambassadors', async (req, res) => {
+.get('/json-export/ambassadors', async (req, res) => {
   if (!req.authenticated) return _401(res, 'Permission denied.')
 
-  let csv = await exportAmbassadors(req.neode);
+  let json = await exportAmbassadorsJSON(req.neode);
+
+  return res.send(json)
+})
+.get('/json-export/triplers', async (req, res) => {
+  if (!req.authenticated) return _401(res, 'Permission denied.')
+
+  let json = await exportTriplersJSON(req.neode);
+
+  return res.send(json)
+}).get('/csv-export/ambassadors', async (req, res) => {
+  if (!req.authenticated) return _401(res, 'Permission denied.')
+
+  let csv = await exportAmbassadorsCSV(req.neode);
 
   return res.send(csv)
 })
 .get('/csv-export/triplers', async (req, res) => {
   if (!req.authenticated) return _401(res, 'Permission denied.')
 
-  let csv = await exportTriplers(req.neode);
+  let csv = await exportTriplersCSV(req.neode);
 
   return res.send(csv)
 })

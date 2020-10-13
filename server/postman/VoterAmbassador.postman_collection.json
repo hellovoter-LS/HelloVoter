@@ -2828,6 +2828,329 @@
 			"response": []
 		},
 		{
+			"name": "Create paypal account",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"id": "a5a7fda3-a329-478f-a07d-9e89f4e3cffd",
+						"exec": [
+							"pm.test(\"Status test\", function () {",
+							"    pm.response.to.have.status(204);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {
+					"accept": true,
+					"accept-encoding": true,
+					"connection": true,
+					"host": true,
+					"user-agent": true
+				}
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "x-client-ip",
+						"type": "text",
+						"value": "127.0.0.1"
+					},
+					{
+						"key": "Content-Type",
+						"type": "text",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"type": "text",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/v1/va/payouts/account?paypal=true",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"va",
+						"payouts",
+						"account"
+					],
+					"query": [
+						{
+							"key": "paypal",
+							"value": "true"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Create tripler for Paypal",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"id": "e9070774-142b-4262-ac12-68f73e34e9f9",
+						"exec": [
+							"pm.test(\"Status test\", function () {",
+							"    pm.response.to.have.status(200);",
+							"",
+							"    let jsonData = pm.response.json()",
+							"    pm.globals.set('paypal_tripler_id', jsonData.id);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {
+					"accept": true,
+					"accept-encoding": true,
+					"connection": true,
+					"host": true,
+					"user-agent": true
+				}
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "x-client-ip",
+						"type": "text",
+						"value": "127.0.0.1"
+					},
+					{
+						"key": "Content-Type",
+						"type": "text",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"type": "text",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"first_name\": \"PayPal\",\n\t\"last_name\": \"Tripler\",\n\t\"address\": {\"address1\": \"1365 Logan St\", \"city\": \"Denver\", \"state\": \"CO\", \"zip\": 80203},\n\t\"phone\": \"+1 202 555 8383\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/va/triplers",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"va",
+						"triplers"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Claim paypal tripler",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"id": "3e679e8f-fa41-4b98-88e3-cd401a1a6510",
+						"exec": [
+							"pm.test(\"Status test\", function () {",
+							"    pm.response.to.have.status(204);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Authorization",
+						"type": "text",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"triplers\": [\"{{paypal_tripler_id}}\"]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/va/ambassadors/current/triplers",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"va",
+						"ambassadors",
+						"current",
+						"triplers"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Start confirmation process for paypal claimed tripler",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"id": "14d4ab21-bfbe-4b6f-b15c-055e0cbbb5ee",
+						"exec": [
+							"pm.test(\"Status test\", function () {",
+							"    pm.response.to.have.status(204);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {
+					"accept": true,
+					"accept-encoding": true,
+					"connection": true,
+					"host": true,
+					"user-agent": true
+				}
+			},
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "x-client-ip",
+						"type": "text",
+						"value": "127.0.0.1"
+					},
+					{
+						"key": "Content-Type",
+						"type": "text",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"type": "text",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"triplees\": [\"Pay\", \"Pal\", \"My Dude\"]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/va/triplers/{{paypal_tripler_id}}/start-confirm",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"va",
+						"triplers",
+						"{{paypal_tripler_id}}",
+						"start-confirm"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Confirm paypal tripler via SMS",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"id": "951806eb-82f0-47d0-ba70-890f1a834b9d",
+						"exec": [
+							"pm.test(\"Status test\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {
+					"accept": true,
+					"accept-encoding": true,
+					"connection": true,
+					"host": true,
+					"user-agent": true
+				}
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "x-client-ip",
+						"type": "text",
+						"value": "127.0.0.1"
+					},
+					{
+						"key": "Content-Type",
+						"type": "text",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"type": "text",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"From\": \"+1 202 555 8383\",\n\t\"Body\": \"yes\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/public/va/sms/receive",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"public",
+						"va",
+						"sms",
+						"receive"
+					]
+				}
+			},
+			"response": []
+		},
+		{
 			"name": "Delete a tripler (admin api)",
 			"event": [
 				{

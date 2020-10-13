@@ -107,10 +107,6 @@ module.exports = {
     relationship: 'OWNS_ACCOUNT',
     direction: 'out',
     target: 'Account',
-    primary: {
-      type: 'Boolean',
-      default: true
-    },
     properties: {
       since: {
         type: 'localdatetime',
@@ -133,6 +129,7 @@ module.exports = {
     },
     eager: true
   },
-  verification: 'string'
+  verification: 'string',
+  carrier_info: 'string'
 };
 

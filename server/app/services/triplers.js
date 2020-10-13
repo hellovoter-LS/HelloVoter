@@ -1,8 +1,6 @@
 import stringFormat from "string-format";
 
 import logger from "logops";
-import caller_id from "../lib/caller_id";
-import reverse_phone from "../lib/reverse_phone";
 import neo4j from "neo4j-driver";
 import neode from "../lib/neode";
 import { serializeName } from "../lib/utils";
@@ -200,12 +198,17 @@ async function confirmTripler(triplerId) {
     <br>
     Verification:
     <br>
-    ${JSON.parse(tripler.get('verification')).map(v=>v.source + ': ' +  v.name).join(', ')}
+    ${tripler.get('verification')}
     <br>
     <br>
-    Carrier:
+    Carrier Info:
     <br>
     ${tripler.get('carrier_info')}
+    <br>
+    <br>
+    Blocked Carrier Info:
+    <br>
+    ${tripler.get('blocked_carrier_info')}
     <br>
     <br>
 
@@ -306,38 +309,63 @@ async function adminSearchTriplers(req) {
 
 function buildSearchTriplerQuery(query) {
   let neo4jquery = "";
-  if (query.firstName) {
-    neo4jquery += ` apoc.text.levenshteinDistance("${query.firstName
-      .trim()
-      .toLowerCase()}", t.first_name) < 3.0`;
-  }
-
-  if (query.lastName) {
+  if (query.firstName || query.lastName) {
+    let firstNameQuery = ''
+    let lastNameQuery = ''
     if (query.firstName) {
-      neo4jquery += " AND";
+      firstNameQuery = ` first_name:${query.firstName.trim().toLowerCase()}~`;
     }
-    neo4jquery += ` apoc.text.levenshteinDistance("${query.lastName
-      .trim()
-      .toLowerCase()}", t.last_name) < 3.0`;
+    if (query.lastName) {
+      lastNameQuery = ` last_name:${query.lastName.trim().toLowerCase()}~`;
+    }
+    neo4jquery += ` CALL db.index.fulltext.queryNodes("TriplerNameIndex", "${firstNameQuery + lastNameQuery}") YIELD node AS t `
   }
 
   return neo4jquery
 }
 
-async function searchTriplersAmbassador(query) {
-  let neo4jquery = buildSearchTriplerQuery(query);
-  let collection = await neode
+async function searchTriplersAmbassador(req) {
+  let neo4jquery = buildSearchTriplerQuery(req.query);
+
+  /*
+  let exclude_except = '';
+  if (ov_config.exclude_unreg_except_in) {
+    exclude_except += ov_config.exclude_unreg_except_in.split(",").map((state) => {
+      return `AND NOT t.address CONTAINS '\"state\": \"${state}\"' `
+    }).join(' ')
+  }
+  */
+
+  let q = await neode
     .query()
-    .match("t", "Tripler")
-    .whereRaw(neo4jquery)
+    .match("a", "Ambassador")
+    .where("a.id", req.user.get("id"))
     .whereRaw("NOT ()-[:CLAIMS]->(t)")
     .whereRaw("NOT ()-[:WAS_ONCE]->(t)")
-    .return("t")
+    // .whereRaw(`NOT t.voter_id CONTAINS "Unreg" ${exclude_except}`)
+    .whereRaw(`distance(t.location, a.location) <= ${ov_config.search_tripler_max_distance}`) // distance in meters (see .env)
+    .with("a, t, distance(t.location, a.location) AS distance")
+    .orderBy("distance")
+    .return("t, distance")
     .limit(ov_config.suggest_tripler_limit)
-    .execute();
+    .build();
+
+  q.query = neo4jquery + q.query
+  q.query = q.query.replace('$where_a_id', '"' + req.user.get("id") + '"')
+
+  let collection = await neode.cypher(q.query);
+
+  /*
+  let firstNameQuery = req.query.firstName;
+  let lastNameQuery = req.query.lastName;
+
+  let q = `CALL db.index.fulltext.queryNodes("triplerFullNameIndex", "${firstNameQuery + ' ' + lastNameQuery}") YIELD node with node limit 500 with node, apoc.text.levenshteinSimilarity(toLower(node.full_name), "${firstNameQuery + ' ' + lastNameQuery}") as score1, apoc.text.jaroWinklerDistance(toLower(node.full_name), "${firstNameQuery + ' ' + lastNameQuery}") as score2, apoc.text.sorensenDiceSimilarity(toLower(node.full_name), "${firstNameQuery + ' ' + lastNameQuery}") as score3 with node, (score1 + score2 + score3) / 3 as avg_score return node order by avg_score desc limit 100`
+
+  let collection = await neode.cypher(q);
+  */
+
 
   let models = [];
-
   for (var index = 0; index < collection.records.length; index++) {
     let entry = collection.records[index]._fields[0].properties;
     models.push(serializeNeo4JTripler(entry));
@@ -352,18 +380,20 @@ async function searchTriplersAmbassador(query) {
 // searching as admin removes constraint of requiring no claims relationship
 // as well as removing constraint of requiring no upgraded status
 //
-async function searchTriplersAdmin(query) {
-  let neo4jquery = buildSearchTriplerQuery(query);
-  let collection = await neode
+async function searchTriplersAdmin(req) {
+  let neo4jquery = buildSearchTriplerQuery(req.query);
+  let q = await neode
     .query()
     .match("t", "Tripler")
-    .whereRaw(neo4jquery)
     .return("t")
-    .limit(1000)
-    .execute();
+    .limit(ov_config.suggest_tripler_limit)
+    .build();
 
+  q.query = neo4jquery + q.query
+  q.query = q.query.replace('$where_a_id', '"' + req.user.get("id") + '"')
+
+  let collection = await neode.cypher(q.query);
   let models = [];
-
   for (var index = 0; index < collection.records.length; index++) {
     let entry = collection.records[index]._fields[0].properties;
     models.push(serializeNeo4JTripler(entry));
@@ -372,9 +402,15 @@ async function searchTriplersAdmin(query) {
   return models;
 }
 
+async function updateTriplerBlockedCarrier(tripler, carrier) {
+  await tripler.update({
+    blocked_carrier_info: tripler.get('blocked_carrier_info') ? tripler.get('blocked_carrier_info') + JSON.stringify(carrier, null, 2) : JSON.stringify(carrier, null, 2)
+  });
+}
+
 async function updateTriplerCarrier(tripler, carrier) {
   await tripler.update({
-    carrier_info: carrier
+    carrier_info: tripler.get('carrier_info') ? tripler.get('carrier_info') + JSON.stringify(carrier, null, 2) : JSON.stringify(carrier, null, 2)
   });
 }
 
@@ -382,36 +418,9 @@ async function startTriplerConfirmation(
   ambassador,
   tripler,
   triplerPhone,
-  triplees
+  triplees,
+  verification
 ) {
-
-  // check against Twilio caller ID and Ekata data
-  let twilioCallerId = await caller_id(triplerPhone);
-  let ekataReversePhone = await reverse_phone(triplerPhone);
-
-  let verification = [];
-
-  if (twilioCallerId) {
-    try {
-      verification.push({
-        source: 'Twilio',
-        name: twilioCallerId.callerName && twilioCallerId.callerName.caller_name
-      })
-    } catch (err) {
-      logger.error("Could not get verification info for tripler: %s", err);
-    }
-  }
-
-  if (ekataReversePhone) {
-    try {
-      verification.push({
-        source: 'Ekata',
-        name: ekataReversePhone.addOns.results && ekataReversePhone.addOns.results.ekata_reverse_phone.result && ekataReversePhone.addOns.results.ekata_reverse_phone.result.belongs_to && ekataReversePhone.addOns.results.ekata_reverse_phone.result.belongs_to.name
-      })
-    } catch (err) {
-      logger.error("Could not get verification info for tripler: %s", err);
-    }
-  }
 
   try {
     await sms(
@@ -432,10 +441,10 @@ async function startTriplerConfirmation(
   }
 
   await tripler.update({
-    triplees: JSON.stringify(triplees),
+    triplees: JSON.stringify(triplees, null, 2),
     status: "pending",
     phone: triplerPhone,
-    verification: JSON.stringify(verification)
+    verification: tripler.get('verification') ? tripler.get('verification') + JSON.stringify(verification, null, 2) : JSON.stringify(verification, null, 2)
   });
 }
 
@@ -450,5 +459,6 @@ module.exports = {
   searchTriplersAdmin: searchTriplersAdmin,
   adminSearchTriplers: adminSearchTriplers,
   startTriplerConfirmation: startTriplerConfirmation,
-  updateTriplerCarrier: updateTriplerCarrier
+  updateTriplerCarrier: updateTriplerCarrier,
+  updateTriplerBlockedCarrier: updateTriplerBlockedCarrier
 };

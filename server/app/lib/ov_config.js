@@ -59,6 +59,9 @@ export const ov_config = {
   plaid_public_key: getConfig("plaid_public_key", true, null),
   plaid_environment: getConfig("plaid_environment", true, null),
   stripe_secret_key: getConfig("stripe_secret_key", true, null),
+  paypal_environment: getConfig("paypal_environment", true, null),
+  paypal_client_id: getConfig("paypal_client_id", true, null),
+  paypal_client_secret: getConfig("paypal_client_secret", true, null),
   organization_name: getConfig("organization_name", false, "unknown org name"),
   ambassador_landing_page: getConfig("ambassador_landing_page", true, null),
   business_url: getConfig("business_url", true, null),
@@ -155,5 +158,8 @@ export const ov_config = {
   // This should be a pipe delimited list of strings
   blocked_carriers: getConfig("blocked_carriers", false, ""),
   ekata_api_key: getConfig("ekata_api_key", false, null),
-  ekata_addon: getConfig("ekata_addon", false, null)
+  ekata_addon: getConfig("ekata_addon", false, null),
+  stress: getConfig("stress", false, false),
+  exclude_unreg_except_in: getConfig("exclude_unreg_except_in", false, ""),
+  search_tripler_max_distance: getConfig("search_tripler_max_distance", false, 150000)
 };
