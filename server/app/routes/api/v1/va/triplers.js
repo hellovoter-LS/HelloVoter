@@ -231,7 +231,7 @@ async function startTriplerConfirmation(req, res) {
   if (!triplees || triplees.length !== 3) {
     return error(400, res, 'Insufficient triplees, cannot start confirmation')
   }
-if (!tripler_birthdate_mm_yy) {
+if (!tripler_birthdate_mm_yy ||tripler_birthdate_mm_yy.length <4 ) {
     return error(400, res, 'Please add birthdate, cannot start confirmation')
   }
 

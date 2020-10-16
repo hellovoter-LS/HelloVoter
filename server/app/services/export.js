@@ -106,9 +106,11 @@ async function exportTriplers(neode) {
         'Ambassador Name',
         'Ambassador External ID',
         'Phone',
+        'DOB entry',
         'Triplee1',
         'Triplee2',
-        'Triplee3'
+        'Triplee3',
+        
     ];
 
     if (x === 0) {
@@ -131,6 +133,7 @@ async function exportTriplers(neode) {
         serializeName(ambassador.first_name, ambassador.last_name),
         ambassador.external_id,
         tripler.phone,
+        tripler.dob_entry,
         tripler.triplees ? tripler.triplees[0].first_name ? serializeTripleeForCSV(tripler.triplees[0]) : tripler.triplees[0] : '',
         tripler.triplees ? tripler.triplees[0].first_name ? serializeTripleeForCSV(tripler.triplees[1]) : tripler.triplees[1] : '',
         tripler.triplees ? tripler.triplees[0].first_name ? serializeTripleeForCSV(tripler.triplees[2]) : tripler.triplees[2] : '',

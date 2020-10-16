@@ -93,3 +93,5 @@ NOTES:
 - /Users/azra/Desktop/BlockPower.Vote/HelloVoter/server/app/services/triplers.js inside the function that actually makes the update startTriplerConfirmation
 
 <!-- To store the info inside the CSV etc -->
+
+-
