@@ -99,7 +99,7 @@ function getStripeAccount(ambassador) {
   let payout_account = null;
 
   ambassador.get('owns_account').forEach((entry) => {
-    if (entry.otherNode().get('account_type') === 'stripe') {
+   if (entry.otherNode().get('account_type') === 'stripe' && entry.otherNode().get('is_primary')) {
       payout_account = entry.otherNode();
     }
   });
@@ -116,18 +116,18 @@ async function disburse(ambassador, tripler) {
   // pending => disbursed => settled
   validateForPayment(ambassador, tripler);
 
-  let query = `MATCH (:Ambassador{id: \'${ambassador.get('id')}\'})-[r:GETS_PAID{tripler_id: \'${tripler.get('id')}\'}]->(p:Payout{status: \'pending\'}) RETURN p.id`;
+  let query = `MATCH (:Ambassador{id: \'${ambassador.get('id')}\'})-[:GETS_PAID{tripler_id: \'${tripler.get('id')}\'}]->(p:Payout{status: \'pending\'}) RETURN p.id`;
   let res = await neode.cypher(query);
   if (res.records.length === 0) {
-    return;    
-  } 
+    return;
+  }
 
   let payout_id = res.records[0]._fields[0];
   let payout = await neode.first('Payout', 'id', payout_id);
 
   let amount = parseInt(payout.get('amount'));
 
-  let payout_account = getStripeAccount(ambassador);  
+  let payout_account = getStripeAccount(ambassador);
   if (!payout_account) {
     throw 'Stripe account not set for ambassador, cannot pay';
   }
@@ -146,7 +146,7 @@ async function disburse(ambassador, tripler) {
     });
   } catch(err) {
     await payout.update({ error: JSON.stringify(err) });
-    throw err;  
+    throw err;
   }
 
   // update relationship details
@@ -161,7 +161,7 @@ async function settle(ambassador, tripler) {
   let query = `MATCH (:Ambassador{id: \'${ambassador.get('id')}\'})-[r:GETS_PAID{tripler_id: \'${tripler.get('id')}\'}]->(p:Payout{status: \'disbursed\'}) RETURN p.id`;
   let res = await neode.cypher(query);
   if (res.records.length === 0) {
-    return;    
+    return;
   }
 
   let payout_id = res.records[0]._fields[0];
@@ -185,15 +185,15 @@ async function settle(ambassador, tripler) {
       throw 'Stripe account for ambassador not found, cannot settle!';
     }
     stripe_payout = await stripe(ov_config.stripe_secret_key).payouts.create({
-      amount: amount, 
-      currency: 'usd', 
+      amount: amount,
+      currency: 'usd',
       description: getPayoutDescription(ambassador, tripler)
     }, {
       stripeAccount: account.get('account_id')
     });
   } catch(err) {
     await payout.update({ error: JSON.stringify(err) });
-    throw err;      
+    throw err;
   }
 
   // update relationship details

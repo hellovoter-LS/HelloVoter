@@ -24,7 +24,7 @@ function serializeAccount(account) {
 function serializeAmbassador(ambassador) {
   let obj = {};
   ['id', 'external_id', 'date_of_birth', 'first_name', 'last_name', 'phone', 'email', 'location', 'signup_completed', 'onboarding_completed', 'approved', 'locked', 'payout_provider', 'payout_additional_data', 'admin'].forEach(x => obj[x] = ambassador.get(x));
-  obj['address'] = !!ambassador.get('address') ? JSON.parse(ambassador.get('address')) : null;
+  obj['address'] = !!ambassador.get('address') ? JSON.parse(ambassador.get('address').replace('#', 'no.')) : null;
   obj['display_address'] = !!obj['address'] ? serializeAddress(obj['address']) : null;
   obj['display_name'] = serializeName(ambassador.get('first_name'), ambassador.get('last_name'));
   obj['quiz_results'] = !!ambassador.get('quiz_results') ? JSON.parse(ambassador.get('quiz_results')) : null;
@@ -36,7 +36,7 @@ function serializeAmbassador(ambassador) {
 
 function serializeAmbassadorForAdmin(ambassador) {
   let obj = serializeAmbassador(ambassador);
-  obj.verification = JSON.parse(ambassador.get('verification'));
+  obj.verification = ambassador.get('verification');
   return obj;
 }
 
@@ -59,8 +59,8 @@ function serializePayout(payout) {
 
 function serializeTriplerForCSV(tripler) {
   let obj = {};
-  ['voter_id', 'id', 'first_name', 'last_name', 'status', 'phone', 'location', 'email'].forEach(x => obj[x] = tripler.get(x));
-  obj['address'] = !!tripler.get('address') ? JSON.parse(tripler.get('address')) : null;
+  ['voter_id', 'id', 'first_name', 'last_name', 'status', 'phone', 'location', 'email', 'verification'].forEach(x => obj[x] = tripler.get(x));
+  obj['address'] = !!tripler.get('address') ? JSON.parse(tripler.get('address').replace('#', 'no.')) : null;
   obj['display_address'] = !!obj['address'] ? serializeAddress(obj['address']) : null;
   obj['display_name'] = serializeName(tripler.get('first_name'), tripler.get('last_name'));
   obj['triplees'] = !!tripler.get('triplees') ? JSON.parse(tripler.get('triplees')) : null;

@@ -71,5 +71,6 @@ module.exports = {
     default: false
   },
   verification: 'string',
-  carrier_info: 'string'
+  carrier_info: 'string',
+  blocked_carrier_info: 'string'
 };

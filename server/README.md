@@ -35,6 +35,9 @@ For this server, configure an `.env` file. The following is a complete list of v
     PLAID_PUBLIC_KEY=
     PLAID_ENVIRONMENT=
     STRIPE_SECRET_KEY=
+    PAYPAL_ENVIRONMENT=
+    PAYPAL_CLIENT_ID=
+    PAYPAL_CLIENT_SECRET=
     TWILIO_DISABLE=
     TWILIO_ACCOUNT_SID=
     TWILIO_AUTH_TOKEN=
@@ -85,6 +88,10 @@ For this server, configure an `.env` file. The following is a complete list of v
     EKATA_ADDON=
     REJECTION_SMS_FOR_TRIPLER=
     REJECTION_SMS_FOR_AMBASSADOR=
+    REACT_APP_NO_AUTH=
+    STRESS=
+    EXCLUDE_UNREG_EXCEPT_IN=
+    SEARCH_TRIPLER_MAX_DISTANCE=
 
 The meaning of each config item is as follows:
 
@@ -112,14 +119,17 @@ The meaning of each config item is as follows:
 * `VOLUNTEER_ADD_NEW`: Whether or not volunteers can add new addresses & people that don't exist in the database.
 * `PURGE_IMPORT_RECORDS`: By default, import records are kept in the database, so you can trace where things came from. For larger operations (>20 million), we recommend setting this to `1` as otherwise the speed of data imports will be significantly impacted.
 * `DEBUG`: Whether or not cypher and other debugging info is sent to the console log.
-* `PAYPAL_STRIPE`: Whether or not stripe is supported as a payout method.
-* `PAYPAL_PAYPAL`: Whether or not paypal is supported as a payout method.
+* `PAYOUT_STRIPE`: Whether or not stripe is supported as a payout method.
+* `PAYOUT_PAYPAL`: Whether or not paypal is supported as a payout method.
 * `PAYOUT_PER_TRIPLER`: Amount in cents to be disbursed to the ambassador for every confirmed tripler.
 * `PLAID_CLIENT_ID`: The client ID from your Plaid developer account. Needed for ambassador payouts.
 * `PLAID_SECRET`: The secret from your Plaid developer account. Needed for ambassador payouts.
 * `PLAID_PUBLIC_KEY`: The public key from your Plaid developer account. Needed for ambassador payouts.
 * `PLAID_ENVIRONMENT`: The environment plaid is running in, can be sandbox, development or production.
 * `STRIPE_SECRET_KEY`: The secret key from your Stripe developer account. Needed for ambassador payouts.
+* `PAYPAL_ENVIRONMENT`: The environment paypal is running in, can be sandbox, development or production.
+* `PAYPAL_CLIENT_ID`: The client ID from your Paypal developer account. Needed for ambassador payouts.
+* `PAYPAL_CLIENT_SECRET`: The secret key from your Paypal developer account. Needed for ambassador payouts.
 * `TWILIO_DISABLE`: Setting it to true will disable twilio.
 * `TWILIO_ACCOUNT_SID`: SID of twilio account.
 * `TWILIO_AUTH_TOKEN`: Auth token of twilio account.
@@ -170,4 +180,7 @@ The meaning of each config item is as follows:
 * `EKATA_ADDON`: If Ekata is available as a Twilio add-on, set this to true.
 * `REJECTION_SMS_FOR_TRIPLER`: The SMS message that the tripler receives when they reply 'no' to the system.
 * `REJECTION_SMS_FOR_AMBASSADOR`: The SMS message that the ambassador receives when one of their triplers replies 'no' to the system.
+* `STRESS`: If stress testing, disable twilio verification and external_id uniqueness constraint.
+* `EXCLUDE_UNREG_EXCEPT_IN`: Exclude unregistered voters except in these comma-separated 2-char states.
+* `SEARCH_TRIPLER_MAX_DISTANCE`: Distance constraint on tripler search
 

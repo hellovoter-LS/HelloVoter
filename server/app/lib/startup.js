@@ -157,6 +157,44 @@ export async function doDbInit(db) {
     }
   }
 
+  let existingIndexes = await db.query('call db.indexes()');
+
+  let indexes = [
+    {label: 'Ambassador', property: 'location', create: 'create index on :Ambassador(location)'},
+    {label: 'Tripler', property: 'location', create: 'create index on :Tripler(location)'},
+  ];
+
+  // create any indexes we need if they don't exist
+  await asyncForEach(indexes, async (index) => {
+    let ref = await db.query('call db.indexes() yield tokenNames, properties with * where {label} in tokenNames and {property} in properties return count(*)', index);
+    if (ref.data[0] === 0) {
+      console.log("Cypher exec: "+index.create);
+      await db.query(index.create);
+    }
+  });
+
+  // delete older name indexes, if they exist
+  let full_text_index_needed = true;
+  await asyncForEach(existingIndexes.data, async (index) => {
+    if (index[0] === 'INDEX ON :Tripler(first_name)') {
+      console.log('Deleting older name index')
+      await db.query('DROP INDEX ON :Tripler(first_name)')
+    }
+    if (index[0] === 'INDEX ON :Tripler(last_name)') {
+      console.log('Deleting older name index')
+      await db.query('DROP INDEX ON :Tripler(last_name)')
+    }
+    if (index[0] === 'INDEX ON NODE:Tripler(first_name, last_name)') {
+      full_text_index_needed = false;
+    }
+  });
+
+  // create full text search index, if needed
+  if (full_text_index_needed) {
+    console.log('Creating newer name index')
+    await db.query('CALL db.index.fulltext.createNodeIndex("TriplerNameIndex", ["Tripler"], ["first_name", "last_name"]);');
+  }
+
   /*
   let indexes = [
     {label: 'Attribute', property: 'id', create: 'create constraint on (a:Attribute) assert a.id is unique'},

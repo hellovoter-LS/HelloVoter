@@ -9,7 +9,7 @@ import ambassadorsSvc from '../../../../services/ambassadors';
 import { error } from '../../../../services/errors';
 
 import {
-  _204, _401, _403, _404, geoCode
+  _204, _400, _401, _403, _404, geoCode
 } from '../../../../lib/utils';
 
 import {
@@ -39,7 +39,7 @@ async function createAmbassador(req, res) {
     if (req.models.Ambassador.phone.unique) {
       let existing_ambassador = await req.neode.first('Ambassador', 'phone', normalize(req.body.phone));
       if(existing_ambassador) {
-        return error(400, res, "That phone number is already in use.");
+        return error(400, res, "That phone number is already in use. Cannot create ambassador.");
       }
     }
 
@@ -48,7 +48,7 @@ async function createAmbassador(req, res) {
 
       if (req.models.Ambassador.email.unique && 
           await req.neode.first('Ambassador', 'email', req.body.email)) {
-        return error(400, res, "That email address is already in use.");
+        return error(400, res, "That email address is already in use. Cannot create ambassador.");
       }
     }
 
@@ -63,8 +63,8 @@ async function createAmbassador(req, res) {
       last_name: req.body.last_name || null,
       phone: normalize(req.body.phone),
       email: req.body.email || null,
-      address: JSON.stringify(req.body.address),
-      quiz_results: JSON.stringify(req.body.quiz_results) || null,
+      address: JSON.stringify(req.body.address, null, 2),
+      quiz_results: JSON.stringify(req.body.quiz_results, null, 2) || null,
       approved: false,
       locked: false,
       signup_completed: false,
@@ -230,11 +230,6 @@ async function makeAdmin(req, res) {
     ${found.get('phone')}
     <br>
     <br>
-    Verification:
-    <br>
-    ${JSON.parse(found.get('verification')).map(v=>v.source + ': ' +  v.name).join(', ')}
-    <br>
-    <br>
     `;
 
     let subject = `New Admin for ${ov_config.organization_name}`;
@@ -251,18 +246,44 @@ async function signup(req, res) {
   //check carrier lookup for blocked carriers
   let carrierLookup = await carrier(normalize(req.body.phone));
   if(carrierLookup.carrier.isBlocked) {
-    return _400(res, `We're sorry, due to fraud concerns '${carrierLookup.carrier.name}' phone numbers are not permitted. Please try again.`);
+    return error(400, res, `We're sorry, due to fraud concerns '${carrierLookup.carrier.name}' phone numbers are not permitted. Please try again.`, { request: req.body });
+  }
+
+  // check against Twilio caller ID and Ekata data
+  let twilioCallerId = await caller_id(req.body.phone);
+  let ekataReversePhone = await reverse_phone(req.body.phone);
+  let verification = [];
+
+  if (twilioCallerId) {
+    try {
+      verification.push({
+        source: 'Twilio',
+        name: twilioCallerId
+      })
+    } catch (err) {
+      logger.error("Could not get verification info for ambassador: %s", err);
+    }
+  }
+  if (ekataReversePhone) {
+    try {
+      verification.push({
+        source: 'Ekata',
+        name: ekataReversePhone.addOns.results.ekata_reverse_phone
+      })
+    } catch (err) {
+      logger.error("Could not get verification info for ambassador: %s", err);
+    }
   }
 
   try {
-    new_ambassador = await ambassadorsSvc.signup(req.body);
+    new_ambassador = await ambassadorsSvc.signup(req.body, verification, carrierLookup);
   }
   catch (err) {
     if (err instanceof ValidationError) {
-      return error(400, res, err.message);
+      return error(400, res, err.message, req.body);
     } else {
       req.logger.error("Unhandled error in %s: %s", req.url, err);
-      return error(500, res, 'Unable to update ambassador form data');
+      return error(500, res, 'Unable to update ambassador form data', { ambassador: req.body, verification: verification });
     }
   }
 
@@ -297,7 +318,7 @@ async function updateAmbassador(req, res) {
     if (req.models.Ambassador.phone.unique) {
       let existing_ambassador = await req.neode.first('Ambassador', 'phone', normalize(req.body.phone));
       if(existing_ambassador && existing_ambassador.get('id') !== found.get('id')) {
-        return error(400, res, "That phone number is already in use.");
+        return error(400, res, "That phone number is already in use. Cannot update ambassador.");
       }
     }
   }
@@ -308,7 +329,7 @@ async function updateAmbassador(req, res) {
     if (req.models.Ambassador.email.unique) {
       let existing_ambassador = await req.neode.first('Ambassador', 'email', req.body.email);
       if(existing_ambassador && existing_ambassador.get('id') !== found.get('id')) {
-        return error(400, res, "That email address is already in use.");
+        return error(400, res, "That email address is already in use. Cannot update ambassador.");
       }
     }
   }
@@ -331,14 +352,14 @@ async function updateAmbassador(req, res) {
     if (coordinates === null) {
       return error(400, res, "Invalid address, ambassador cannot be updated");
     }
-    json.address = JSON.stringify(req.body.address);
+    json.address = JSON.stringify(req.body.address, null, 2);
     json.location = new neo4j.types.Point(4326, // WGS 84 2D
                                            parseFloat(coordinates.longitude, 10),
                                            parseFloat(coordinates.latitude, 10));
   }
 
   if (req.body.quiz_results) {
-    json.quiz_results = JSON.stringify(res.body.quiz_results);
+    json.quiz_results = JSON.stringify(res.body.quiz_results, null, 2);
   }
   let updated = await found.update(json);
   return res.json(serializeAmbassador(updated));
@@ -355,7 +376,7 @@ async function updateCurrentAmbassador(req, res) {
     if (req.models.Ambassador.phone.unique) {
       let existing_ambassador = await req.neode.first('Ambassador', 'phone', normalize(req.body.phone));
       if(existing_ambassador && existing_ambassador.get('id') !== found.get('id')) {
-        return error(400, res, "That phone number is already in use.");
+        return error(400, res, "That phone number is already in use. Cannot update current ambassador.");
       }
     }
   }
@@ -366,7 +387,7 @@ async function updateCurrentAmbassador(req, res) {
     if (req.models.Ambassador.email.unique) {
       let existing_ambassador = await req.neode.first('Ambassador', 'email', req.body.email);
       if(existing_ambassador && existing_ambassador.get('id') !== found.get('id')) {
-        return error(400, res, "That email address is already in use.");
+        return error(400, res, "That email address is already in use. Cannot update current ambassador.");
       }
     }
   }
@@ -389,14 +410,14 @@ async function updateCurrentAmbassador(req, res) {
     if (coordinates === null) {
       return error(400, res, "Invalid address, ambassador cannot be updated");
     }
-    json.address = JSON.stringify(req.body.address);
+    json.address = JSON.stringify(req.body.address, null, 2);
     json.location = new neo4j.types.Point(4326, // WGS 84 2D
                                            parseFloat(coordinates.longitude, 10),
                                            parseFloat(coordinates.latitude, 10));
   }
 
   if (req.body.quiz_results) {
-    json.quiz_results = JSON.stringify(req.body.quiz_results);
+    json.quiz_results = JSON.stringify(req.body.quiz_results, null, 2);
   }
   let updated = await found.update(json);
   return res.json(serializeAmbassador(updated));
@@ -424,26 +445,30 @@ async function claimTriplers(req, res) {
     return error(400, res, 'Invalid request, empty list of triplers');
   }
 
-  let triplers = [];
+  // The triplers specified by this ambassador
+  let requested_triplers = [];
+  let all_triplers = [];
   for (let entry of req.body.triplers) {
     let model = await req.neode.first('Tripler', 'id', entry);
     if (!model) {
       return error(404, res, 'Tripler not found, invalid id');
     }
-    triplers.push(model);
+    requested_triplers.push(model);
+    all_triplers.push(model);
   }
 
+  // Add all existing triplers
   let current_claims_num = 0;
   ambassador.get('claims').forEach((entry) => {
-    triplers.push(entry.otherNode());
+    all_triplers.push(entry.otherNode());
     current_claims_num++;
   });
-  triplers = [... new Set(triplers)]; // eliminate duplicates
-  if (triplers.length > parseInt(ov_config.claim_tripler_limit)) {
+  all_triplers = [... new Set(all_triplers)]; // eliminate duplicates
+  if (all_triplers.length > parseInt(ov_config.claim_tripler_limit)) {
     return _400(res, `You may select up to ${ov_config.claim_tripler_limit} possible Vote Triplers. Please select up to ${ov_config.claim_tripler_limit - current_claims_num} more to continue.`);
   }
 
-  for(let entry of triplers) {
+  for(let entry of requested_triplers) {
     await ambassador.relateTo(entry, 'claims');
   }
 
@@ -469,7 +494,7 @@ async function completeOnboarding(req, res) {
 
   let updated = await found.update({
     onboarding_completed: true,
-    quiz_results: req.body.quiz_results ? JSON.stringify(req.body.quiz_results) : req.body ? JSON.stringify(req.body) : null,
+    quiz_results: req.body.quiz_results ? JSON.stringify(req.body.quiz_results, null, 2) : req.body ? JSON.stringify(req.body, null, 2) : null,
   });
   return res.json(serializeAmbassador(updated));
 }

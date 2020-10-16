@@ -16,5 +16,9 @@ module.exports = {
   account_data: {
     type: 'string',
     required: false
+  },
+  is_primary: {
+    type: 'boolean',
+    default: false
   }
 };

@@ -9,12 +9,10 @@ import {
 } from '../lib/validations';
 
 import { ValidationError } from '../lib/errors';
-import { geoCode, serializeName, zipToLatLon } from '../lib/utils';
+import { trimFields, geoCode, serializeName, zipToLatLon } from '../lib/utils';
 import { normalize } from '../lib/phone';
 import mail from '../lib/mail';
 import { ov_config } from '../lib/ov_config';
-import caller_id from '../lib/caller_id';
-import reverse_phone from '../lib/reverse_phone';
 
 import models from '../models/va';
 
@@ -27,7 +25,7 @@ async function findById(id) {
 }
 
 async function findAmbassadorsWithPendingDisbursements() {
-  let query = `MATCH (a:Ambassador)-[:GETS_PAID]->(:Payout {status: \'pending\'}) RETURN a.id`;
+  let query = `MATCH (a:Ambassador)-[:GETS_PAID]->(:Payout {status: \'pending\'}) WHERE a.approved = true RETURN a.id`;
   let res = await neode.cypher(query);
   let ambassadors = [];
   if (res.records.length > 0) {
@@ -39,7 +37,7 @@ async function findAmbassadorsWithPendingDisbursements() {
 }
 
 async function findAmbassadorsWithPendingSettlements() {
-  let query = `MATCH (a:Ambassador)-[:GETS_PAID]->(:Payout {status: \'disbursed\'}) RETURN a.id`;
+  let query = `MATCH (a:Ambassador)-[:GETS_PAID]->(:Payout {status: \'disbursed\'}) WHERE a.approved = true RETURN a.id`;
   let res = await neode.cypher(query);
   let ambassadors = [];
   if (res.records.length > 0) {
@@ -50,7 +48,9 @@ async function findAmbassadorsWithPendingSettlements() {
   return ambassadors;
 }
 
-async function signup(json) {
+async function signup(json, verification, carrierLookup) {
+  json = trimFields(json)
+
   if (!validateEmpty(json, ['first_name', 'phone', 'address'])) {
     throw new ValidationError("Invalid payload, ambassador cannot be created");
   }
@@ -62,21 +62,21 @@ async function signup(json) {
   // Ensure that address.state is always uppercase
   let address = json.address;
   address.state = address.state.toUpperCase();
-
+  address.zip = address.zip.toString().split(' ').join('');
 
   let allowed_states = ov_config.allowed_states.toUpperCase().split(',');
   if (allowed_states.indexOf(address.state) === -1) {
-    throw new ValidationError("Sorry, but state employment laws don't allow us to pay Voting Ambassadors in your state.")
+    throw new ValidationError("Sorry, but state employment laws don't allow us to pay Voting Ambassadors in your state.", { ambassador: json, verification: verification });
   }
 
   if (models.Ambassador.phone.unique) {
     let existing_ambassador = await neode.first('Ambassador', 'phone', normalize(json.phone));
     if (existing_ambassador) {
-      throw new ValidationError("That phone number is already in use.");
+      throw new ValidationError("You already have an account. Email support@blockpower.vote for help. E5", { ambassador: json, verification: verification });
     }
   }
 
-  if (models.Ambassador.external_id.unique) {
+  if (models.Ambassador.external_id.unique && !ov_config.stress) {
     let existing_ambassador = await neode.first('Ambassador', 'external_id', json.externalId);
     if (existing_ambassador) {
       throw new ValidationError("If you have already signed up as an Ambassador using Facebook or Google, you cannot sign up again.");
@@ -88,44 +88,16 @@ async function signup(json) {
 
     if (models.Ambassador.email.unique &&
       await neode.first('Ambassador', 'email', json.email)) {
-      throw new ValidationError("That email address is already in use.");
+      throw new ValidationError("You already have an account. Email support@blockpower.vote for help. E6");
     }
   }
 
   let coordinates = await geoCode(address);
   if (coordinates === null) {
-    coordinates = await zipToLatLon(json.address.zip);
+    coordinates = await zipToLatLon(address.zip);
   }
   if (coordinates === null) {
     throw new ValidationError("Our system doesn’t recognize that zip code. Please try again.");
-  }
-
-  // check against Twilio caller ID and Ekata data
-  let twilioCallerId = await caller_id(json.phone);
-  let ekataReversePhone = await reverse_phone(json.phone);
-
-  let verification = [];
-
-  if (twilioCallerId) {
-    try {
-      verification.push({
-        source: 'Twilio',
-        name: twilioCallerId.callerName && twilioCallerId.callerName.caller_name
-      })
-    } catch (err) {
-      logger.error("Could not get verification info for ambassador: %s", err);
-    }
-  }
-
-  if (ekataReversePhone) {
-    try {
-      verification.push({
-        source: 'Ekata',
-        name: ekataReversePhone.addOns.results && ekataReversePhone.addOns.results.ekata_reverse_phone.result && ekataReversePhone.addOns.results.ekata_reverse_phone.result.belongs_to && ekataReversePhone.addOns.results.ekata_reverse_phone.result.belongs_to.name
-      })
-    } catch (err) {
-      logger.error("Could not get verification info for ambassador: %s", err);
-    }
   }
 
   let new_ambassador = await neode.create('Ambassador', {
@@ -135,8 +107,8 @@ async function signup(json) {
     phone: normalize(json.phone),
     email: json.email || null,
     date_of_birth: json.date_of_birth || null,
-    address: JSON.stringify(address),
-    quiz_results: JSON.stringify(json.quiz_results) || null,
+    address: JSON.stringify(address, null, 2),
+    quiz_results: JSON.stringify(json.quiz_results, null, 2) || null,
     approved: true,
     locked: false,
     signup_completed: true,
@@ -145,8 +117,9 @@ async function signup(json) {
       latitude: parseFloat(coordinates.latitude, 10),
       longitude: parseFloat(coordinates.longitude, 10)
     },
-    external_id: json.externalId,
-    verification: JSON.stringify(verification)
+    external_id: ov_config.stress ? json.externalId + Math.random() : json.externalId,
+    verification: JSON.stringify(verification, null, 2),
+    carrier_info: JSON.stringify(carrierLookup, null, 2)
   });
 
   let existing_tripler = await neode.first('Tripler', {
@@ -209,7 +182,12 @@ async function signup(json) {
     <br>
     Verification:
     <br>
-    ${JSON.parse(new_ambassador.get('verification')).map(v => v.source + ': ' + v.name).join(', ')}
+    ${new_ambassador.get('verification')}
+    <br>
+    <br>
+    Carrier:
+    <br>
+    ${new_ambassador.get('carrier_info')}
     <br>
     <br>
     `;
@@ -224,6 +202,21 @@ async function signup(json) {
   }, 100);
 
   return new_ambassador;
+}
+
+async function getPrimaryAccount(ambassador) {
+  let relationships = ambassador.get('owns_account');
+  let primaryAccount = null;
+
+  if (relationships.length > 0) {
+    relationships.forEach((ownsAccount) => {
+      if (ownsAccount.otherNode().get('is_primary')) {
+        primaryAccount = ownsAccount.otherNode();
+      }
+    });
+  }
+
+  return primaryAccount;
 }
 
 async function unclaimTriplers(req) {
@@ -247,5 +240,6 @@ module.exports = {
   findAmbassadorsWithPendingDisbursements: findAmbassadorsWithPendingDisbursements,
   findAmbassadorsWithPendingSettlements: findAmbassadorsWithPendingSettlements,
   signup: signup,
+  getPrimaryAccount: getPrimaryAccount,
   unclaimTriplers: unclaimTriplers
 };
