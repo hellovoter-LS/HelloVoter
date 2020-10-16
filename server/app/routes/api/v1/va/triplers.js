@@ -225,9 +225,21 @@ async function startTriplerConfirmation(req, res) {
   }
 
   let triplees = req.body.triplees;
+  let tripler_birthdate_mm_yy = req.body.tripler_birthdate_mm_yy
+
+  //if !birthdate tell system to add birthdate
   if (!triplees || triplees.length !== 3) {
     return error(400, res, 'Insufficient triplees, cannot start confirmation')
   }
+if (!tripler_birthdate_mm_yy) {
+    return error(400, res, 'Please add birthdate, cannot start confirmation')
+  }
+
+  // make a bdate cheker below similar to req.body.phone checker, validate and make sure it's the right format + #s [do it after golden path working]
+
+    //code up a birthdate checker function inside tripler services that returns true if the bdate is valid, false if it doesn't (see findAmbassadorsWithPendingDisbursements in ambassador services)
+
+    // if true pass through || if false 
 
   if (req.body.phone) {
     if (!validatePhone(req.body.phone)) {
@@ -253,7 +265,7 @@ async function startTriplerConfirmation(req, res) {
   }
 
   try {
-    triplersSvc.startTriplerConfirmation(ambassador, tripler, triplerPhone, triplees);
+    triplersSvc.startTriplerConfirmation(ambassador, tripler, triplerPhone, triplees, tripler_birthdate_mm_yy);
   } catch (err) {
     req.logger.error("Unhandled error in %s: %s", req.url, err);
     return error(500, res, 'Error sending confirmation sms to the tripler');

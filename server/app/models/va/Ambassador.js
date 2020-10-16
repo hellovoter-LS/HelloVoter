@@ -45,6 +45,10 @@ module.exports = {
         type: 'localdatetime',
         default: () => new Date,
       },
+    dob_entry: {
+      type: 'string',
+      default: 'Not provided'
+        },
     },
     eager: true
   },

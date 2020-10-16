@@ -8,7 +8,7 @@ Also see the [CONTRIBUTING](/CONTRIBUTING.md) document for more background and a
 
 ### Frontend
 
-A Vote Ambassador signs up with and interacts mainly with the React front-end. The front-end code can be found here: [hello-voter](https://github.com/colab-coop/hello-voter). 
+A Vote Ambassador signs up with and interacts mainly with the React front-end. The front-end code can be found here: [hello-voter](https://github.com/colab-coop/hello-voter).
 
 ### Admin-ui
 
@@ -34,12 +34,14 @@ The admin panel can be found here: [https://github.com/colab-coop/HelloVoter-adm
 ### Usage
 
 After following the steps above,
+
 1. The API will be available at <http://localhost:8080/api/v1/>
 1. The Neo4j Browser will be available at <http://localhost:7474/browser/>
-    - Username `neo4j`, default password `hellovoter`
-    - Example query to see all data: `MATCH (n) RETURN n`
+   - Username `neo4j`, default password `hellovoter`
+   - Example query to see all data: `MATCH (n) RETURN n`
 
 For local development without requiring real OAuth:
+
 1. Set `REACT_APP_NO_AUTH=1`
 1. Modify an Ambassador to work with a mock Authorization token: `MATCH (a:Ambassador {admin: true}) SET a.external_id = "noauth:localuser"`
 1. Use this Bearer token when making requests: `eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6Im5vYXV0aDpsb2NhbHVzZXIiLCJuYW1lIjoiTG9jYWwgVXNlciIsImVtYWlsIjoibG9jYWxAbG9jYWxob3N0IiwiaXNzIjoib3Vydm9pY2V1c2Eub3JnIiwiaWF0IjoxLCJleHAiOjIsImRpc2NsYWltZXIiOiJCbGFoIGJsYWggZGlzY2xhaW1lciJ9.qa5K2pgi1uLYkV7jP3aNvazcchvgBD8RwhdG6Q86GxlvusQx7nNCTr3LrAnn6pxDJxNidJoqjD3Ie77jj5hWK_-lbgtHMLhNXGExDxI8pQ0I5ZnAV_5pDu7vARinoy3mctQWFO2pIQSu8KzQc7eQ90IQZBseE7nQV-ugZRfK8Teo_48COcJxGxqwCNCO80G_JzBoif2xaWRb2i2n0qeSUKfXN4Fwy46JOiHFnL9yOS5s54tB6doe1wFJNYps8eVQbVkTBL1I9PQP4Gs-BmzND0vcQaczTdu_J50uvLL5do1FHb48lRhrA44ZrYv3EVwNsJXZtH3MbasxgPrZhl69VQ`
@@ -58,9 +60,9 @@ You are, of course, free to deploy in any way you wish, but we have not attempte
 
 ## License
 
-	Software License Agreement (AGPLv3+)
+    Software License Agreement (AGPLv3+)
 
-	Copyright (c) 2020, Our Voice USA. All rights reserved.
+    Copyright (c) 2020, Our Voice USA. All rights reserved.
 
         This program is free software; you can redistribute it and/or
         modify it under the terms of the GNU Affero General Public License
@@ -79,3 +81,15 @@ You are, of course, free to deploy in any way you wish, but we have not attempte
 **NOTE:** We relicense the mobile app code for the purposes of distribution on the App Store. For details, read our [CLA Rationale](CLA-Rationale.md)
 
 Logos, icons, and other artwork depicting the Our Voice bird are copyright and not for redistribution without express written permission by Our Voice USA.
+
+NOTES:
+
+<!-- To collect the info inside the DB -->
+
+- change code inside /Users/azra/Desktop/BlockPower.Vote/HelloVoter/server/app/models/va/Ambassador.js to add the DOB to the model (lines 48-51)
+
+- inside the api that takes DOB data from FE and passes it to start tripler confimration: /Users/azra/Desktop/BlockPower.Vote/HelloVoter/server/app/routes/api/v1/va/triplers.js (line 228)
+
+- /Users/azra/Desktop/BlockPower.Vote/HelloVoter/server/app/services/triplers.js inside the function that actually makes the update startTriplerConfirmation
+
+<!-- To store the info inside the CSV etc -->

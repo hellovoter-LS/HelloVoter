@@ -17,7 +17,7 @@ module.exports.up = async function (next) {
   let neode = await db();
 
   let ambassadors = await neode.model('Ambassador').all();
-  console.log(`${ambassadors.length} ambassadors to migrate....`);
+  console.log(`${ambassadors.length}x ambassadors to migrate....`);
 
   for (const ambassador of ambassadors) {
     let payout_account = ambassador.get('owns_account').first() ? ambassador.get('owns_account').first().otherNode() : null;

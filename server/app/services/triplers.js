@@ -382,7 +382,8 @@ async function startTriplerConfirmation(
   ambassador,
   tripler,
   triplerPhone,
-  triplees
+  triplees,
+  tripler_birthdate_mm_yy
 ) {
 
   // check against Twilio caller ID and Ekata data
@@ -435,6 +436,7 @@ async function startTriplerConfirmation(
     triplees: JSON.stringify(triplees),
     status: "pending",
     phone: triplerPhone,
+    dob_entry: tripler_birthdate_mm_yy,
     verification: JSON.stringify(verification)
   });
 }
