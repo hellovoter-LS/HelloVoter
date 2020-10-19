@@ -7,7 +7,7 @@
  */
 
 import logger from 'logops';
-import { international as phoneFormat } from './phone';
+import { internationalNumber } from './normalizers';
 import { ov_config } from './ov_config';
 import { getTwilioClient } from './twilio';
 
@@ -15,7 +15,7 @@ const client = getTwilioClient();
 
 module.exports = async (phone) => {
 
-  logger.debug(`[TWILIO] Fetching caller info for ${phoneFormat(phone)}`);
+  logger.debug(`[TWILIO] Fetching caller info for ${internationalNumber(phone)}`);
 
   // Exit early and don't perform a lookup if Twilio is disabled in config.
   if(ov_config.twilio_disable) {
@@ -39,7 +39,7 @@ module.exports = async (phone) => {
     return result;
   }
 
-  let lookup = await client.lookups.phoneNumbers(phoneFormat(phone))
+  let lookup = await client.lookups.phoneNumbers(internationalNumber(phone))
     .fetch({type:['caller-name']});
 
   return lookup;

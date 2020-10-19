@@ -1,5 +1,3 @@
-let enforceUnique = process.env.STRESS_TESTING !== 'true';
-
 module.exports = {
   id: {
     type: 'uuid',
@@ -32,7 +30,7 @@ module.exports = {
   error: {
     type: 'string',
     required: false
-  }, 
+  },
   to_account: {
     type: 'node',
     relationship: 'TO_ACCOUNT',

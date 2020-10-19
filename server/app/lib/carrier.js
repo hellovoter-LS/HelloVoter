@@ -12,7 +12,7 @@
  */
 
 import logger from 'logops';
-import { international as phoneFormat } from './phone';
+import { internationalNumber } from './normalizers';
 import { ov_config } from './ov_config';
 import { getTwilioClient } from './twilio';
 
@@ -20,7 +20,7 @@ const client = getTwilioClient();
 
 module.exports = async (phone) => {
 
-  logger.debug(`[TWILIO] Checking carrier for ${phoneFormat(phone)}`);
+  logger.debug(`[TWILIO] Checking carrier for ${internationalNumber(phone)}`);
 
   // Exit early and don't perform a lookup if nothing is blocked in config
   // or if Twilio is disabled in config.
@@ -49,7 +49,7 @@ module.exports = async (phone) => {
     return result;
   }
 
-  let lookup = await client.lookups.phoneNumbers(phoneFormat(phone))
+  let lookup = await client.lookups.phoneNumbers(internationalNumber(phone))
     .fetch({type:['carrier']});
 
   let blockedCarriers = blockedCarrierString.split('|').map((val) => val.toUpperCase());
@@ -61,7 +61,7 @@ module.exports = async (phone) => {
     let carrierName = lookup.carrier.name.toUpperCase()
     let isBlocked = blockedCarriers.includes(carrierName)
     if(isBlocked) {
-      logger.info(`[TWILIO] Carrier ${carrierName} for ${phoneFormat(phone)} is blocked in config`);
+      logger.info(`[TWILIO] Carrier ${carrierName} for ${internationalNumber(phone)} is blocked in config`);
     }
     lookup.carrier.isBlocked = isBlocked;
     return lookup;

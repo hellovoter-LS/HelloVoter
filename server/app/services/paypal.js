@@ -5,14 +5,16 @@ import neo4j from 'neo4j-driver';
 import neode from '../lib/neode';
 import { ov_config } from '../lib/ov_config';
 
-let environment = null;
-if (ov_config.paypal_environment === 'sandbox') {
-   environment = new paypal.core.SandboxEnvironment(ov_config.paypal_client_id, ov_config.paypal_client_secret);
-} else if (ov_config.paypal_environment === 'production') {
-   environment = new paypal.core.LiveEnvironment(ov_config.paypal_client_id, ov_config.paypal_client_secret);
-}
+let client = null;
 
-let client = new paypal.core.PayPalHttpClient(environment);
+// Only initialize PayPal if env vars are set up.
+if (ov_config.paypal_environment) {
+  const environment = ov_config.paypal_environment === 'sandbox'
+    ? new paypal.core.SandboxEnvironment(ov_config.paypal_client_id, ov_config.paypal_client_secret)
+    : new paypal.core.LiveEnvironment(ov_config.paypal_client_id, ov_config.paypal_client_secret);
+
+  client = new paypal.core.PayPalHttpClient(environment);
+}
 
 function validateForPayment(ambassador, tripler) {
   if (!ambassador.get('approved')) {

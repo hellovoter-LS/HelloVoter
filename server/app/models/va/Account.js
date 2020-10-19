@@ -1,5 +1,3 @@
-let enforceUnique = process.env.STRESS_TESTING !== 'true';
-
 module.exports = {
   id: {
     type: 'uuid',

@@ -1,5 +1,3 @@
-let enforceUnique = process.env.STRESS_TESTING !== 'true';
-
 module.exports = {
   id: {
     type: 'uuid',
@@ -7,7 +5,6 @@ module.exports = {
   },
   voter_id: {
     type: 'string',
-    unique: enforceUnique
   },
   first_name: {
     type: 'string',
@@ -17,9 +14,8 @@ module.exports = {
   date_of_birth: 'string',
   phone: {
     type: 'string',
-    unique: enforceUnique
   },
-  email: 'string',  
+  email: 'string',
   status: 'string',
   confirmed_at: 'localdatetime',
   upgrade_sms_sent: {

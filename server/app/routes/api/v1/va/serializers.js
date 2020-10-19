@@ -64,6 +64,8 @@ function serializeTriplerForCSV(tripler) {
   obj['display_address'] = !!obj['address'] ? serializeAddress(obj['address']) : null;
   obj['display_name'] = serializeName(tripler.get('first_name'), tripler.get('last_name'));
   obj['triplees'] = !!tripler.get('triplees') ? JSON.parse(tripler.get('triplees')) : null;
+  obj['is_ambassador_and_has_confirmed'] = tripler.get('is_ambassador_and_has_confirmed') ? true : false;
+  obj['is_ambassador'] = tripler.get('is_ambassador') ? true : false;
   return obj;
 }
 

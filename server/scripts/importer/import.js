@@ -7,7 +7,7 @@ import fs from 'fs';
 import cliProgress from 'cli-progress';
 import { v4 as uuidv4 } from 'uuid';
 
-import { normalize } from '../../app/lib/phone';
+import { normalizePhone } from '../../app/lib/normalizers';
 import { geoCode } from '../../app/lib/utils';
 
 const argv = yargs
@@ -68,7 +68,7 @@ function parseZip(record) {
 
 function parsePhone(record) {
   let phone = record[2].trim().length !== 0 ? record[2].trim() : record[1].trim();
-  return phone.length > 0 ? normalize(phone) : null;
+  return phone.length > 0 ? normalizePhone(phone) : null;
 }
 
 function parseLocation(record, argv) {
@@ -160,7 +160,7 @@ async function parseCsv(argv) {
       } catch (err) {
         console.log('error parsing: ', err);
       }
-    }    
+    }
 
     bar1.increment();
   }

@@ -5,7 +5,7 @@
  */
 
 import logger from 'logops';
-import { international as phoneFormat } from './phone';
+import { internationalNumber } from './normalizers';
 import { ov_config } from './ov_config';
 import axios from 'axios';
 import { getTwilioClient } from './twilio';
@@ -24,7 +24,7 @@ module.exports = async (phone) => {
     return result;
   }
   if(!apiKey && !addon) {
-    logger.info(`[EKATA] Not querying Ekata for ${phoneFormat(phone)} because EKATA_API_KEY not set and EKATA_ADDON not TRUE.`);
+    logger.info(`[EKATA] Not querying Ekata for ${internationalNumber(phone)} because EKATA_API_KEY not set and EKATA_ADDON not TRUE.`);
 
     let result = new Promise((resolve, reject) => {
       resolve();
@@ -32,13 +32,13 @@ module.exports = async (phone) => {
     return result;
   }
 
-  logger.info(`[EKATA] Fetching caller info for ${phoneFormat(phone)}`);
+  logger.info(`[EKATA] Fetching caller info for ${internationalNumber(phone)}`);
   try {
     let response;
     if (apiKey) {
-      response = await axios.get(`https://api.ekata.com/3.1/phone?api_key=${apiKey}&phone=${phoneFormat(phone)}`);
+      response = await axios.get(`https://api.ekata.com/3.1/phone?api_key=${apiKey}&phone=${internationalNumber(phone)}`);
     } else if (addon) {
-      response = await client.lookups.phoneNumbers(phoneFormat(phone))
+      response = await client.lookups.phoneNumbers(internationalNumber(phone))
         .fetch({addOns: ['ekata_reverse_phone']})
     }
     return response;

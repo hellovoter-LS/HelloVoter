@@ -5,7 +5,7 @@ import { geoCode } from '../app/lib/utils.js';
 import { v4 as uuidv4 } from 'uuid';
 import neode from  '../app/lib/neode.js';
 import addresses from './seed_data/addresses.json';
-import { normalize as phoneFormat } from '../app/lib/phone';
+import { normalizePhone } from '../app/lib/normalizers';
 import yargs from 'yargs';
 
 const argv = yargs
@@ -58,10 +58,10 @@ const argv = yargs
 
 async function randomPhone(model) {
   while (true) {
-    let phone = phoneFormat(faker.phone.phoneNumber());
+    let phone = normalizePhone(faker.phone.phoneNumber());
     let entry = await neode.first(model, 'phone', phone);
     if (!entry) return phone;
-  }  
+  }
 }
 
 async function emptyDatabase() {
@@ -160,7 +160,7 @@ async function seed(argv) {
 
   console.log("Creating unapproved ambassador...");
   ambassador = await createAmbassador({approved: false, signupCompleted: false, createTriplers: false});
-  console.log(`Ambassador created with email ${ambassador.get('email')}`);  
+  console.log(`Ambassador created with email ${ambassador.get('email')}`);
 
   console.log("Creating locked ambassador...");
   ambassador = await createAmbassador({locked: true, approved: true, signupCompleted: true, createTriplers: true});
@@ -175,7 +175,7 @@ async function seed(argv) {
 
     console.log(`Creating {locked: ${locked}, approved: ${approved}, signup_completed: ${signupCompleted}} ambassador ${index + 1} of ${max} ...`);
     let ambassador = await createAmbassador({createTriplers: true});
-    
+
     console.log(`Ambassador created with email ${ambassador.get('email')}`);
   }
 

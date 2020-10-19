@@ -1,27 +1,25 @@
 import stringFormat from "string-format";
 
-import logger from "logops";
 import neo4j from "neo4j-driver";
 import neode from "../lib/neode";
 import { serializeName } from "../lib/utils";
-import { normalize } from "../lib/phone";
+import { normalizePhone } from "../lib/normalizers";
 import mail from "../lib/mail";
 import { ov_config } from "../lib/ov_config";
 import sms from "../lib/sms";
-import stripe from "./stripe";
 import {
   serializeTripler,
   serializeNeo4JTripler,
   serializeTriplee,
-  serializeTripleeForCSV,
 } from "../routes/api/v1/va/serializers";
+import { confirmTriplerEmail } from '../emails/confirmTriplerEmail';
 
 async function findById(triplerId) {
   return await neode.first("Tripler", "id", triplerId);
 }
 
 async function findByPhone(phone) {
-  return await neode.first("Tripler", "phone", normalize(phone));
+  return await neode.first("Tripler", "phone", normalizePhone(phone));
 }
 
 async function findRecentlyConfirmedTriplers() {
@@ -103,17 +101,11 @@ async function confirmTripler(triplerId) {
   }
 
   // send email in the background
-  let tripler_name = serializeName(
-    tripler.get("first_name"),
-    tripler.get("last_name")
-  );
-  let tripler_phone = tripler.get("phone");
-  let ambassador_name = serializeName(
-    ambassador.get("first_name"),
-    ambassador.get("last_name")
-  );
-
   setTimeout(async () => {
+    let ambassador_name = serializeName(
+      ambassador.get("first_name"),
+      ambassador.get("last_name")
+    );
     let relationships = ambassador.get("claims");
     let date_claimed = null;
     let relationship = null;
@@ -128,91 +120,8 @@ async function confirmTripler(triplerId) {
         date_claimed = relationship.get("since");
       }
     }
-    let verification = JSON.parse(tripler.get("verification"));
     let address = JSON.parse(tripler.get("address"));
-    let body = `
-    Organization Name:
-    <br>
-    ${ov_config.organization_name}
-    <br>
-    <br>
-    LALVOTERID:
-    <br>
-    ${tripler.get("voter_id")}
-    <br>
-    <br>
-    First Name:
-    <br>
-    ${tripler.get("first_name")}
-    <br>
-    <br>
-    Last Name:
-    <br>
-    ${tripler.get("last_name")}
-    <br>
-    <br>
-    Street Address:
-    <br>
-    ${address.address1}
-    <br>
-    <br>
-    Zip:
-    <br>
-    ${address.zip}
-    <br>
-    <br>
-    Date Claimed:
-    <br>
-    ${new Date(relationship.get("since"))}
-    <br>
-    <br>
-    Date Confirmed:
-    <br>
-    ${new Date(confirmed_at)}
-    <br>
-    <br>
-    Ambassador:
-    <br>
-    ${ambassador_name}
-    <br>
-    <br>
-    Phone Number:
-    <br>
-    ${tripler.get("phone")}
-    <br>
-    <br>
-    Triplee 1:
-    <br>
-    ${serializeTripleeForCSV(triplees[0])}
-    <br>
-    <br>
-    Triplee 2:
-    <br>
-    ${serializeTripleeForCSV(triplees[1])}
-    <br>
-    <br>
-    Triplee 3:
-    <br>
-    ${serializeTripleeForCSV(triplees[2])}
-    <br>
-    <br>
-    Verification:
-    <br>
-    ${tripler.get('verification')}
-    <br>
-    <br>
-    Carrier Info:
-    <br>
-    ${tripler.get('carrier_info')}
-    <br>
-    <br>
-    Blocked Carrier Info:
-    <br>
-    ${tripler.get('blocked_carrier_info')}
-    <br>
-    <br>
-
-    `;
+    let body = confirmTriplerEmail(tripler, address, relationship, confirmed_at, ambassador_name, triplees);
     let subject = stringFormat(ov_config.tripler_confirm_admin_email_subject, {
       organization_name: ov_config.organization_name,
     });
@@ -288,7 +197,7 @@ async function upgradeNotification(triplerId) {
 async function adminSearchTriplers(req) {
   let query = {};
 
-  if (req.query.phone) query.phone = normalize(req.query.phone);
+  if (req.query.phone) query.phone = normalizePhone(req.query.phone);
   if (req.query.email) query.email = req.query.email;
   if (req.query.firstName) query.first_name = req.query.firstName;
   if (req.query.lastName) query.last_name = req.query.lastName;
@@ -325,17 +234,15 @@ function buildSearchTriplerQuery(query) {
 }
 
 async function searchTriplersAmbassador(req) {
-  let neo4jquery = buildSearchTriplerQuery(req.query);
 
   /*
+  let neo4jquery = buildSearchTriplerQuery(req.query);
   let exclude_except = '';
   if (ov_config.exclude_unreg_except_in) {
     exclude_except += ov_config.exclude_unreg_except_in.split(",").map((state) => {
       return `AND NOT t.address CONTAINS '\"state\": \"${state}\"' `
     }).join(' ')
   }
-  */
-
   let q = await neode
     .query()
     .match("a", "Ambassador")
@@ -354,17 +261,60 @@ async function searchTriplersAmbassador(req) {
   q.query = q.query.replace('$where_a_id', '"' + req.user.get("id") + '"')
 
   let collection = await neode.cypher(q.query);
-
-  /*
-  let firstNameQuery = req.query.firstName;
-  let lastNameQuery = req.query.lastName;
-
-  let q = `CALL db.index.fulltext.queryNodes("triplerFullNameIndex", "${firstNameQuery + ' ' + lastNameQuery}") YIELD node with node limit 500 with node, apoc.text.levenshteinSimilarity(toLower(node.full_name), "${firstNameQuery + ' ' + lastNameQuery}") as score1, apoc.text.jaroWinklerDistance(toLower(node.full_name), "${firstNameQuery + ' ' + lastNameQuery}") as score2, apoc.text.sorensenDiceSimilarity(toLower(node.full_name), "${firstNameQuery + ' ' + lastNameQuery}") as score3 with node, (score1 + score2 + score3) / 3 as avg_score return node order by avg_score desc limit 100`
-
-  let collection = await neode.cypher(q);
   */
 
+  let firstNameQuery = req.query.firstName;
+  let lastNameQuery = req.query.lastName;
+  let q = '';
 
+  if (req.query.firstName && req.query.lastName) {
+    q = `
+    CALL db.index.fulltext.queryNodes("triplerFullNameIndex", "${'*' + firstNameQuery + '* *' + lastNameQuery + '*'}") YIELD node
+    with node, replace(replace(toLower("${firstNameQuery}"),'-',''),"'",'') as first_n_q, replace(replace(toLower("${lastNameQuery}"),'-',''),"'",'') as last_n_q
+    where NOT ()-[:CLAIMS]->(node)
+    and NOT ()-[:WAS_ONCE]->(node)
+    with first_n_q, last_n_q, node
+    limit 500
+    match(a:Ambassador{id:"${req.user.get('id')}"})
+    with a.location as a_location, node, apoc.text.levenshteinSimilarity(replace(replace(toLower(node.full_name),'-',''),"'",''), first_n_q + ' ' + last_n_q) as score1, apoc.text.jaroWinklerDistance(replace(replace(toLower(node.full_name),'-',''),"'",''), first_n_q + ' ' + last_n_q) as score2, apoc.text.sorensenDiceSimilarity(replace(replace(toLower(node.full_name),'-',''),"'",''), first_n_q + ' ' + last_n_q) as score3
+    with node, (score1 + score2 + score3) / 3 as avg_score, distance(a_location, node.location)/1000 as distance
+    with node, avg_score / distance as final_score
+    return node
+    order by final_score desc limit 100
+    `
+  } else if (req.query.firstName) {
+    q = `
+    CALL db.index.fulltext.queryNodes("triplerFirstNameIndex", "${'*' + firstNameQuery + '*'}") YIELD node
+    with node, replace(replace(toLower("${firstNameQuery}"),'-',''),"'",'') as first_n_q
+    where NOT ()-[:CLAIMS]->(node)
+    and NOT ()-[:WAS_ONCE]->(node)
+    with first_n_q, node
+    limit 500
+    match(a:Ambassador{id:"${req.user.get('id')}"})
+    with a.location as a_location, node, apoc.text.levenshteinSimilarity(replace(replace(toLower(node.first_name),'-',''),"'",''), first_n_q) as score1, apoc.text.jaroWinklerDistance(replace(replace(toLower(node.first_name),'-',''),"'",''), first_n_q) as score2, apoc.text.sorensenDiceSimilarity(replace(replace(toLower(node.first_name),'-',''),"'",''), first_n_q) as score3
+    with node, (score1 + score2 + score3) / 3 as avg_score, distance(a_location, node.location)/1000 as distance
+    with node, avg_score / distance as final_score
+    return node
+    order by final_score desc, node.last_name limit 100
+    `;
+  } else if (req.query.lastName) {
+    q = `
+    CALL db.index.fulltext.queryNodes("triplerLastNameIndex", "${'*' + lastNameQuery + '*'}") YIELD node
+    with node, replace(replace(toLower("${lastNameQuery}"),'-',''),"'",'') as last_n_q
+    where NOT ()-[:CLAIMS]->(node)
+    and NOT ()-[:WAS_ONCE]->(node)
+    with last_n_q, node
+    limit 500
+    match(a:Ambassador{id:"${req.user.get('id')}"})
+    with a.location as a_location, node, apoc.text.levenshteinSimilarity(replace(replace(toLower(node.last_name),'-',''),"'",''), last_n_q) as score1, apoc.text.jaroWinklerDistance(replace(replace(toLower(node.last_name),'-',''),"'",''), last_n_q) as score2, apoc.text.sorensenDiceSimilarity(replace(replace(toLower(node.last_name),'-',''),"'",''), last_n_q) as score3
+    with node, (score1 + score2 + score3) / 3 as avg_score, distance(a_location, node.location)/1000 as distance
+    with node, avg_score / distance as final_score
+    return node
+    order by final_score desc, node.first_name limit 100
+    `;
+  }
+
+  let collection = await neode.cypher(q);
   let models = [];
   for (var index = 0; index < collection.records.length; index++) {
     let entry = collection.records[index]._fields[0].properties;
@@ -374,12 +324,8 @@ async function searchTriplersAmbassador(req) {
   return models;
 }
 
-//
-// searchTriplersAdmin
-//
 // searching as admin removes constraint of requiring no claims relationship
 // as well as removing constraint of requiring no upgraded status
-//
 async function searchTriplersAdmin(req) {
   let neo4jquery = buildSearchTriplerQuery(req.query);
   let q = await neode

@@ -189,12 +189,6 @@ export async function doDbInit(db) {
     }
   });
 
-  // create full text search index, if needed
-  if (full_text_index_needed) {
-    console.log('Creating newer name index')
-    await db.query('CALL db.index.fulltext.createNodeIndex("TriplerNameIndex", ["Tripler"], ["first_name", "last_name"]);');
-  }
-
   /*
   let indexes = [
     {label: 'Attribute', property: 'id', create: 'create constraint on (a:Attribute) assert a.id is unique'},

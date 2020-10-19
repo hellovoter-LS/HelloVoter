@@ -1,12 +1,9 @@
 import { Router } from 'express';
-import neo4j from 'neo4j-driver';
 import stringFormat from 'string-format';
 import { v4 as uuidv4 } from 'uuid';
 
-import { normalize } from '../../../../lib/phone';
+import { normalizePhone } from '../../../../lib/normalizers';
 import { ov_config } from '../../../../lib/ov_config';
-import caller_id from '../../../../lib/caller_id';
-import reverse_phone from '../../../../lib/reverse_phone';
 import triplersSvc from '../../../../services/triplers';
 import { error } from '../../../../services/errors';
 
@@ -15,40 +12,36 @@ import {
 } from '../../../../lib/utils';
 
 import {
-  validateEmpty, validatePhone, validateEmail
+  validateEmpty, validatePhone, validateEmail, validateUniquePhone, validateUnique, verifyCallerIdAndReversePhone, validateCarrier
 } from '../../../../lib/validations';
 
 import { serializeAmbassador, serializeTripler, serializeNeo4JTripler, serializeTriplee } from './serializers';
 
 import sms from '../../../../lib/sms';
-import carrier from '../../../../lib/carrier';
+import { getUserJsonFromRequest } from '../../../../lib/normalizers';
 
 async function createTripler(req, res) {
   let new_tripler = null
-
   try {
     if (!validateEmpty(req.body, ['first_name', 'phone', 'address'])) {
       return error(400, res, "Invalid payload, tripler cannot be created");
     }
 
     if (!validatePhone(req.body.phone)) {
-      return error(400, res, "Our system doesn’t recognize that phone number. Cannot create tripler. Please try again.");
+      return error(400, res, "Our system doesn't recognize that phone number. Cannot create tripler. Please try again.");
     }
 
-    if (req.models.Tripler.phone.unique) {
-      if (await req.neode.first('Tripler', 'phone', normalize(req.body.phone))) {
-        return error(400, res, "That phone number is already in use.");
-      }
+    if (!await validateUniquePhone('Tripler', req.body.phone)) {
+      return error(400, res, "That phone number is already in use.");
     }
 
     if (req.body.email) {
-      if (!validateEmail(req.body.email)) return _400(res, "Invalid email");
+      if (!validateEmail(req.body.email)) {
+        return error(400, res, "Invalid email");
+      }
 
-      if (req.models.Tripler.email.unique) {
-        let existing_tripler = await req.neode.first('Tripler', 'email', req.body.email);
-        if(existing_tripler) {
-          return error(400, res, "Tripler with this email already exists");
-        }
+      if (!await validateUnique('Tripler', { email: req.body.email })) {
+        return error(400, res, "Tripler with this email already exists.");
       }
     }
 
@@ -61,7 +54,7 @@ async function createTripler(req, res) {
       id: uuidv4(),
       first_name: req.body.first_name,
       last_name: req.body.last_name || null,
-      phone: normalize(req.body.phone),
+      phone: normalizePhone(req.body.phone),
       email: req.body.email || null,
       address: JSON.stringify(req.body.address, null, 2),
       triplees: !req.body.triplees ? null : JSON.stringify(req.body.triplees, null, 2),
@@ -80,21 +73,12 @@ async function createTripler(req, res) {
   return res.json(serializeTripler(new_tripler));
 }
 
-//
-// adminSearchTriplers
-//
 // useful for QA purposes
-//
 async function adminSearchTriplers(req, res) {
   let models = await triplersSvc.adminSearchTriplers(req)
   return res.json(models);
 }
 
-//
-// searchTriplersAmbassador
-//
-// search triplers as an ambassador
-//
 async function searchTriplersAmbassador(req, res) {
   if (!req.query.firstName && !req.query.lastName) {
     return res.json([]);
@@ -103,11 +87,6 @@ async function searchTriplersAmbassador(req, res) {
   return res.json(models);
 }
 
-//
-// searchTriplersAdmin
-//
-// search triplers as an admin
-//
 async function searchTriplersAdmin(req, res) {
   if (!req.query.firstName && !req.query.lastName) {
     return res.json([]);
@@ -116,26 +95,20 @@ async function searchTriplersAdmin(req, res) {
   return res.json(models);
 }
 
-//
-// suggestTriplers
-//
 // provide a list of potential triplers for an ambassador to select from
-//
 async function suggestTriplers(req, res) {
-  /*
   let exclude_except = '';
+
   if (ov_config.exclude_unreg_except_in) {
     exclude_except += ov_config.exclude_unreg_except_in.split(",").map((state) => {
       return `AND NOT t.address CONTAINS '\"state\": \"${state}\"' `
     }).join(' ')
   }
-  */
 
   let collection = await req.neode.query()
-
-  /*
     .match('a', 'Ambassador', {id: req.user.get('id')})
-    .with('a, a.zip as zip')
+    .with('a, apoc.convert.fromJsonMap(a.address) as address')
+    .with('a, toString(address.zip) as zip')
     .match('t', 'Tripler')
     .where('t.zip starts with left(zip,3)')
     .with('a,t')
@@ -147,21 +120,20 @@ async function suggestTriplers(req, res) {
     .return('t, distance')
     .limit(ov_config.suggest_tripler_limit)
     .execute()
-  */
-
+/*
     .match('a', 'Ambassador')
     .where('a.id', req.user.get('id'))
     .match('t', 'Tripler')
     .whereRaw('NOT ()-[:CLAIMS]->(t)')
     .whereRaw('NOT ()-[:WAS_ONCE]->(t)')
-    // .whereRaw(`NOT t.voter_id CONTAINS "Unreg" ${exclude_except}`)
+    .whereRaw(`NOT t.voter_id CONTAINS "Unreg" ${exclude_except}`)
     .whereRaw(`distance(t.location, a.location) <= ${ov_config.ambassador_tripler_relation_max_distance}`) // distance in meters (see .env)
     .with('a, t, distance(t.location, a.location) AS distance')
     .orderBy('distance')
     .return('t, distance')
     .limit(ov_config.suggest_tripler_limit)
     .execute()
-
+*/
   let models = [];
   for (var index = 0; index < collection.records.length; index++) {
     let entry = collection.records[index]._fields[0].properties;
@@ -174,7 +146,11 @@ async function suggestTriplers(req, res) {
 async function fetchTripler(req, res) {
   let ambassador = req.user;
   let tripler = null;
-  ambassador.get('claims').forEach((entry) => { if (entry.otherNode().get('id') === req.params.triplerId) { tripler = entry.otherNode() } } );
+  ambassador.get('claims').forEach((entry) => {
+    if (entry.otherNode().get('id') === req.params.triplerId) {
+      tripler = entry.otherNode();
+    }
+  });
 
   if (!tripler) {
     return error(400, res, "Invalid tripler id, could not fetch tripler.", { ambassador: serializeAmbassador(ambassador), triplerId: req.params.triplerId });
@@ -183,17 +159,18 @@ async function fetchTripler(req, res) {
 }
 
 async function updateTripler(req, res) {
-  let found = null;
-  found = await req.neode.first('Tripler', 'id', req.params.triplerId);
-  if (!found) return error(404, res, "Tripler not found");
+  let found = await req.neode.first('Tripler', 'id', req.params.triplerId);
+
+  if (!found) {
+    return error(404, res, "Tripler not found");
+  }
 
   if (req.body.phone) {
     if (!validatePhone(req.body.phone)) {
-      return error(400, res, "Our system doesn’t recognize that phone number. Cannot update tripler. Please try again.");
+      return error(400, res, "Our system doesn't recognize that phone number. Cannot update tripler. Please try again.");
     }
 
-    let existing_tripler = await req.neode.first('Tripler', 'phone', normalize(req.body.phone));
-    if(existing_tripler && existing_tripler.get('id') !== found.get('id')) {
+    if (!await validateUniquePhone('Tripler', req.body.phone, found.get('id'))) {
       return error(400, res, "That phone number is already in use.");
     }
   }
@@ -201,42 +178,17 @@ async function updateTripler(req, res) {
   if (req.body.email) {
     if (!validateEmail(req.body.email)) return _400(res, "Invalid email");
 
-    if (req.models.Tripler.email.unique) {
-      let existing_tripler = await req.neode.first('Tripler', 'email', req.body.email);
-      if(existing_tripler && existing_tripler.get('id') !== found.get('id')) {
-        return error(400, res, "Tripler with this email already exists");
-      }
+    if (!await validateUnique('Tripler', { email: req.body.email }, found.get('id'))) {
+      return error(400, res, "Tripler with this email already exists.");
     }
   }
 
-  let whitelistedAttrs = ['first_name', 'last_name', 'date_of_birth', 'email', 'status'];
-
-  let json = {};
-  for (let prop in req.body) {
-    if (whitelistedAttrs.indexOf(prop) !== -1) {
-      json[prop] = req.body[prop];
-    }
+  let json;
+  try {
+    json = await getUserJsonFromRequest(req.body);
+  } catch (error) {
+    return error(400, res, error.message);
   }
-
-  if (req.body.phone) {
-    json.phone = normalize(req.body.phone);
-  }
-
-  if (req.body.address) {
-    let coordinates = await geoCode(req.body.address);
-    if (coordinates === null) {
-      return error(400, res, "Invalid address, tripler cannot be updated");
-    }
-    json.address = JSON.stringify(req.body.address, null, 2);
-    json.location = new neo4j.types.Point(4326, // WGS 84 2D
-                                           parseFloat(coordinates.longitude, 10),
-                                           parseFloat(coordinates.latitude, 10));
-  }
-
-  if (req.body.triplees) {
-    json.triplees = JSON.stringify(req.body.triplees, null, 2);
-  }
-
   let updated = await found.update(json);
   return res.json(serializeTripler(updated));
 }
@@ -244,48 +196,31 @@ async function updateTripler(req, res) {
 async function startTriplerConfirmation(req, res) {
   let ambassador = req.user;
   let tripler = null;
-  ambassador.get('claims').forEach((entry) => { if (entry.otherNode().get('id') === req.params.triplerId) { tripler = entry.otherNode() } } );
+  ambassador.get('claims').forEach((entry) => {
+    if (entry.otherNode().get('id') === req.params.triplerId) {
+      tripler = entry.otherNode();
+    }
+  });
+
   if (!tripler) {
     return error(400, res, "Invalid tripler id, could not start tripler confirmation.", { ambassador: serializeAmbassador(ambassador), triplerId: req.params.triplerId });
   }
-  else if (tripler.get('status') !== 'unconfirmed') {
-    return error(400, res, "Invalid status, cannot proceed to begin tripler confirmation.", { ambassador: serializeAmbassador(ambassador), tripler: serializeTripler(tripler), verification: verification });
-  }
 
-  let triplerPhone = req.body.phone ? normalize(req.body.phone): tripler.get('phone');
+  let triplerPhone = req.body.phone ? normalizePhone(req.body.phone): tripler.get('phone');
 
-  // check against Twilio caller ID and Ekata data
-  let twilioCallerId = await caller_id(triplerPhone);
-  let ekataReversePhone = await reverse_phone(triplerPhone);
-  let verification = [];
-  if (twilioCallerId) {
-    try {
-      verification.push({
-        source: 'Twilio',
-        name: twilioCallerId
-      })
-    } catch (err) {
-      logger.error("Could not get verification info for tripler: %s", err);
-    }
-  }
-  if (ekataReversePhone) {
-    try {
-      verification.push({
-        source: 'Ekata',
-        name: ekataReversePhone.addOns.results.ekata_reverse_phone
-      })
-    } catch (err) {
-      logger.error("Could not get verification info for tripler: %s", err);
-    }
+  const verifications = verifyCallerIdAndReversePhone(triplerPhone);
+
+  if (tripler.get('status') !== 'unconfirmed') {
+    return error(400, res, "Invalid status, cannot proceed to begin tripler confirmation.", { ambassador: serializeAmbassador(ambassador), tripler: serializeTripler(tripler), verification: verifications });
   }
 
   if (triplerPhone) {
     if (!validatePhone(triplerPhone)) {
       return error(400, res, "Our records suggest that this number may not be the vote tripler's phone number. Please email support@blockpower.vote for help. E4");
     }
-    let existing_tripler = await req.neode.first('Tripler', 'phone', normalize(triplerPhone));
-    if(existing_tripler && existing_tripler.get('id') !== tripler.get('id')) {
-      return error(400, res, "Our records suggest that this number may not be the vote tripler's phone number. Please email support@blockpower.vote for help. E3", { ambassador: serializeAmbassador(ambassador), tripler: serializeTripler(tripler), verification: verification });
+
+    if (!await validateUniquePhone('Tripler', triplerPhone, tripler.get('id'))) {
+      return error(400, res, "Our records suggest that this number may not be the vote tripler's phone number. Please email support@blockpower.vote for help. E3", { ambassador: serializeAmbassador(ambassador), tripler: serializeTripler(tripler), verification: verifications });
     }
   }
 
@@ -293,12 +228,12 @@ async function startTriplerConfirmation(req, res) {
     return error(400, res, "Our records suggest that this number may not be the vote tripler's phone number. Please email support@blockpower.vote for help. E2");
   }
 
-  let carrierLookup = await carrier(triplerPhone);
-  if(carrierLookup.carrier.isBlocked) {
-    await triplersSvc.updateTriplerBlockedCarrier(tripler, carrierLookup.carrier.name);
+  const { carrier: { name: carrierName, isBlocked } } = await validateCarrier(triplerPhone);
+  if (isBlocked) {
+    await triplersSvc.updateTriplerBlockedCarrier(tripler, carrierName);
     return error(400, res, "Our records suggest that this number may not be the vote tripler's phone number. Please email support@blockpower.vote for help. E1", { ambassador: serializeAmbassador(ambassador), tripler: serializeTripler(tripler)});
   } else {
-    await triplersSvc.updateTriplerCarrier(tripler, carrierLookup.carrier.name);
+    await triplersSvc.updateTriplerCarrier(tripler, carrierName);
   }
 
   let triplees = req.body.triplees;
@@ -307,7 +242,7 @@ async function startTriplerConfirmation(req, res) {
   }
 
   try {
-    await triplersSvc.startTriplerConfirmation(ambassador, tripler, triplerPhone, triplees, verification);
+    await triplersSvc.startTriplerConfirmation(ambassador, tripler, triplerPhone, triplees, verifications);
   } catch (err) {
     req.logger.error("Unhandled error in %s: %s", req.url, err);
     return error(500, res, 'Error sending confirmation sms to the tripler');
